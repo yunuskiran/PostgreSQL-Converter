@@ -1,11 +1,10 @@
-import { Columns } from "./Columns";
+import { Schema } from "./schema";
 
-export class Table {
-    name: string;
-    columns: Array<Columns>;
+export class Table extends Schema {
+    tablename: string;
 
-    constructor(name: string, columns: Columns[]) {
-        this.name = name;
-        this.columns = columns;
+    constructor(tablename: string, schemaname: string) {
+        super(schemaname);
+        this.tablename = tablename;
     }
 }

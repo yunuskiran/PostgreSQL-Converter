@@ -1,5 +1,9 @@
 import * as vscode from 'vscode';
+import { Columns } from './models/columns';
 
+const tableRegex = /^CREATE TABLE \[(.*)\]\.\[(.*)\]\s*\(/;
+const columnRegex = /^\t\[(.*)\] (?:\[(.*)\]\.)?\[(.*)\]\s*(\(.+?\))?(?: COLLATE (\S+))?( IDENTITY\s*\(\d+,\s*\d+\))?(?: ROWGUIDCOL ?)? (?:NOT FOR REPLICATION )?(?:SPARSE +)?(NOT NULL|NULL)(?:\s+CONSTRAINT \[.*\])?(?:\s+DEFAULT \((.*)\))?(?:,|$)?/;
+var columns: Array<Columns>;
 function getText() {
     var text: string = "";
     const editor = vscode.window.activeTextEditor;
@@ -19,10 +23,7 @@ function getText() {
 }
 
 function readAndClean(text: string) {
-    //Remove \r from windows output
     text = text.replace(/(\r)/gm, "");
-
-    //If we are in comment, we look for */, and we remove everything until */
     if (text.match(/(\/\*[^*]*\*\/)|(\/\/[^*]*)/g)) {
         text = text.replace(/(\/\*[^*]*\*\/)|(\/\/[^*]*)/g, '');
         text = text + "\n";
@@ -50,8 +51,35 @@ function calculateRange(start = 0, end = Infinity, step = 1) {
     return rangeIterator;
 }
 
+function addColumnToTable(schemaname: string, tablename: string,
+    columnRegexResult: RegExpExecArray) {
+    var columnname = columnRegexResult[1];
+    var coltypeschema = columnRegexResult[2];
+    var coltype = columnRegexResult[3];
+    var colqual = columnRegexResult[4];
+    var colcollate = columnRegexResult[5];
+    var isidentity = columnRegexResult[6];
+    var colisnull = columnRegexResult[7];
+    var defaultval = columnRegexResult[8];
+    var tobeInsertColumn = new Columns(
+        columnname,
+        coltypeschema,
+        coltype,
+        colqual,
+        colcollate,
+        isidentity === "true",
+        colisnull === "true",
+        defaultval, 0, tablename, schemaname);
+
+    if (columns.indexOf(columns.filter(_ => _.schemaname === schemaname &&
+        _.tablename === tablename && _.name === columnname)[0]) <= 0) {
+        columns.push(tobeInsertColumn);
+    }
+}
+
 export async function convertToPSql(outputChannel: vscode.OutputChannel) {
     debugger;
+    columns = new Array<Columns>();
     outputChannel.clear();
     let text = getText();
     text = readAndClean(text);
@@ -61,26 +89,15 @@ export async function convertToPSql(outputChannel: vscode.OutputChannel) {
         const rangeCalculator = calculateRange(0, lines.length, 1);
         let nextIndex = rangeCalculator.next();
         MAIN: while (!nextIndex.done) {
-            var tableRegex = /^CREATE TABLE \[(.*)\]\.\[(.*)\]\s*\(/;
             if (tableRegex.test(lines[nextIndex.value])) {
                 var tableRegexResult = tableRegex.exec(lines[nextIndex.value]);
-                var schemaname = tableRegexResult[1].toString();
-                var tablename = tableRegexResult[2].toString();
-                outputChannel.appendLine(schemaname+tablename);
+                var schemaname = tableRegexResult[1];
+                var tablename = tableRegexResult[2];
                 nextIndex = rangeCalculator.next();
                 TABLE: while (!nextIndex.done) {
-                    var columnRegex = /^\t\[(.*)\] (?:\[(.*)\]\.)?\[(.*)\]\s*(\(.+?\))?(?: COLLATE (\S+))?( IDENTITY\s*\(\d+,\s*\d+\))?(?: ROWGUIDCOL ?)? (?:NOT FOR REPLICATION )?(?:SPARSE +)?(NOT NULL|NULL)(?:\s+CONSTRAINT \[.*\])?(?:\s+DEFAULT \((.*)\))?(?:,|$)?/;
                     if (columnRegex.test(lines[nextIndex.value])) {
-                        var columnRegexResult = columnRegex.exec(lines[nextIndex.value]);
-                        var columnname = columnRegexResult[1];
-                        var coltypeschema = columnRegexResult[2];
-                        var coltype = columnRegexResult[3];
-                        var colqual = columnRegexResult[4];
-                        var colcollate = columnRegexResult[5];
-                        var isidentity = columnRegexResult[6];
-                        var colisnull = columnRegexResult[7];
-                        var defaultval = columnRegexResult[8];
-                        outputChannel.appendLine(columnname+coltypeschema+coltype+colqual+colcollate+isidentity+colisnull+defaultval);
+                        addColumnToTable(schemaname, tablename,
+                            columnRegex.exec(lines[nextIndex.value]));
                     }
                     nextIndex = rangeCalculator.next();
                 }
@@ -88,6 +105,12 @@ export async function convertToPSql(outputChannel: vscode.OutputChannel) {
             nextIndex = rangeCalculator.next();
         }
     }
+
+    columns.forEach(_ => {
+        outputChannel.appendLine(_.name);
+        outputChannel.appendLine(_.tablename);
+        outputChannel.appendLine(_.schemaname);
+    });
 
     outputChannel.show();
 

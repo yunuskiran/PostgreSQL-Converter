@@ -1,11 +1,7 @@
-import { Table } from "./table";
-
 export class Schema {
-    name: string;
-    tables: Array<Table>;
+    schemaname: string;
 
-    constructor(name: string, tables: Table[]) {
-        this.name = name;
-        this.tables = tables;
+    constructor(schemaname: string) {
+        this.schemaname = schemaname;
     }
 }
