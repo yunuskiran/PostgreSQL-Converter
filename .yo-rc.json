@@ -1,0 +1,7 @@
+{
+  "generator-azuredatastudio": {
+    "promptValues": {
+      "publisher": "test"
+    }
+  }
+}
