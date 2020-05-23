@@ -1,9 +1,12 @@
 import * as vscode from 'vscode';
 import { Columns } from './models/columns';
+import { ColumnTypes } from './models/columntypes';
 
 const tableRegex = /^CREATE TABLE \[(.*)\]\.\[(.*)\]\s*\(/;
 const columnRegex = /^\t\[(.*)\] (?:\[(.*)\]\.)?\[(.*)\]\s*(\(.+?\))?(?: COLLATE (\S+))?( IDENTITY\s*\(\d+,\s*\d+\))?(?: ROWGUIDCOL ?)? (?:NOT FOR REPLICATION )?(?:SPARSE +)?(NOT NULL|NULL)(?:\s+CONSTRAINT \[.*\])?(?:\s+DEFAULT \((.*)\))?(?:,|$)?/;
+const colQualRegex = /\((\d+(?:,\s*\d+)?)\)/;
 var columns: Array<Columns>;
+var columTypes: ColumnTypes;
 function getText() {
     var text: string = "";
     const editor = vscode.window.activeTextEditor;
@@ -51,21 +54,122 @@ function calculateRange(start = 0, end = Infinity, step = 1) {
     return rangeIterator;
 }
 
+function colqualOperation(colQual: string) {
+    if (colQual) {
+        if (colQual === "xml") {
+            colQual = "UNDEFINED";
+        }
+        else if (colQual === '(max)') {
+            colQual = "UNDEFINED";
+        }
+        else {
+            if (!colQualRegex.test(colQual)) {
+                colQual = "UNDEFINED";
+            } else {
+                colQual = colQualRegex.exec(colQual)[1];
+            }
+        }
+    }
+
+    return colQual;
+}
+
+function convertNumericToInt(qual: string) {
+    var numericRegex = /^(\d+),\s*(\d+)$/;
+    if (!numericRegex.test(qual)) {
+        return 'numeric';
+    } else {
+        var items = numericRegex.exec(qual);
+        var precision = items[1];
+        if (Number(precision) <= 4) {
+            return 'smallint';
+        } else if (Number(precision) <= 9) {
+            return 'integer';
+        } else if (Number(precision) <= 18) {
+            return 'bigint';
+        }
+    }
+
+    return `numeric${qual}`;
+
+}
+
+function convertToNewType(coltype: string, colQual: string, columnName: string,
+    tableName: string, schemaName: string) {
+    let type: string = '';
+    let colQualRegex = /\d+,\s*0/;
+    if (coltype) {
+        if (columTypes.findType(coltype)) {
+            if ((colQual && columTypes.findUnqualType(columTypes.findType(coltype)) !== null) ||
+                !colQual) {
+                type = columTypes.findType(coltype);
+            } else if (colQual) {
+                type = `${columTypes.findType(coltype)}.${colQual}`;
+            }
+        } else if (coltype === 'bit' && !colQual) {
+            type = 'boolean';
+        } else if (coltype === 'ntext' && !colQual) {
+            type = "text";
+        } else if (coltype === 'numeric') {
+            if (!colQual) {
+                type = 'numeric';
+            } else if (colQualRegex.test(colQual)) {
+                type = `numeric(${colQual})`;
+            } else if (convertNumericToInt(colQual)) {
+                type = convertNumericToInt(colQual);
+            } else {
+                type = `numeric(${colQual})`;
+            }
+        } else if (coltype === 'sysname') {
+            type = 'varchar(128)';
+        } else if (/^geography$|^geometry$/i.test(coltype)) {
+            type = coltype.toLowerCase();
+        } else if (coltype === 'sql_varian') {
+            type = 'text';
+        } else {
+            type = '';
+        }
+
+        if (/^(\S+)\.(\S+)$/.test(coltype)) {
+            type = `${type}.[]`;
+        }
+    }
+
+    return type;
+}
+
+
 function addColumnToTable(schemaname: string, tablename: string,
     columnRegexResult: RegExpExecArray) {
     var columnname = columnRegexResult[1];
     var coltypeschema = columnRegexResult[2];
     var coltype = columnRegexResult[3];
-    var colqual = columnRegexResult[4];
+    var colQual = columnRegexResult[4];
     var colcollate = columnRegexResult[5];
     var isidentity = columnRegexResult[6];
     var colisnull = columnRegexResult[7];
     var defaultval = columnRegexResult[8];
+    if (coltypeschema) {
+        coltype = `${coltypeschema}.${coltype}`;
+    }
+
+    colQual = colqualOperation(colQual);
+    var newType = convertToNewType(coltype, colQual, columnname, tablename, schemaname);
+    if(isidentity){
+        if(/IDENTITY\s*\((\d+),\s*(\d+)\)/.test(isidentity)){
+            var identityItems=/IDENTITY\s*\((\d+),\s*(\d+)\)/.exec(isidentity);
+            let startSequence= identityItems[1];
+            let stepSequence= identityItems[2];
+            let sequenceName=`${tablename}_${columnname}_seq`.toLowerCase();
+            
+        }   
+    }
+    
     var tobeInsertColumn = new Columns(
         columnname,
         coltypeschema,
-        coltype,
-        colqual,
+        newType,
+        colQual,
         colcollate,
         isidentity === "true",
         colisnull === "true",
@@ -79,6 +183,7 @@ function addColumnToTable(schemaname: string, tablename: string,
 
 export async function convertToPSql(outputChannel: vscode.OutputChannel) {
     debugger;
+    columTypes = new ColumnTypes();
     columns = new Array<Columns>();
     outputChannel.clear();
     let text = getText();
