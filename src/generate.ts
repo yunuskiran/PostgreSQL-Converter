@@ -1,12 +1,20 @@
 import * as vscode from 'vscode';
 import { Columns } from './models/columns';
 import { ColumnTypes } from './models/columntypes';
+import { Sequence } from './models/sequence';
+import { Constraint } from './models/constraint';
 
 const tableRegex = /^CREATE TABLE \[(.*)\]\.\[(.*)\]\s*\(/;
 const columnRegex = /^\t\[(.*)\] (?:\[(.*)\]\.)?\[(.*)\]\s*(\(.+?\))?(?: COLLATE (\S+))?( IDENTITY\s*\(\d+,\s*\d+\))?(?: ROWGUIDCOL ?)? (?:NOT FOR REPLICATION )?(?:SPARSE +)?(NOT NULL|NULL)(?:\s+CONSTRAINT \[.*\])?(?:\s+DEFAULT \((.*)\))?(?:,|$)?/;
 const colQualRegex = /\((\d+(?:,\s*\d+)?)\)/;
+const computedColumnRegex = /^\t\[(.*)\]\s+AS\s+\((.*)\)/;
+const contraintRegex = /^(?: CONSTRAINT \[(.*)\] )?PRIMARY KEY (?:NON)?CLUSTERED/;
+const constrainColRegex = /^\t\[(.*)\] (ASC|DESC)(,?)/;
+const uniqueConstraintRegex = /^\s*(?:CONSTRAINT \[(.*)\] )?UNIQUE/;
 var columns: Array<Columns>;
 var columTypes: ColumnTypes;
+var sequnces: Array<Sequence>;
+var constraints: Array<Constraint>;
 function getText() {
     var text: string = "";
     const editor = vscode.window.activeTextEditor;
@@ -138,6 +146,11 @@ function convertToNewType(coltype: string, colQual: string, columnName: string,
     return type;
 }
 
+function format_identifier(item: string) {
+    var returnValue = item.replace('"', '');
+    return `"${returnValue}"`;
+}
+
 
 function addColumnToTable(schemaname: string, tablename: string,
     columnRegexResult: RegExpExecArray) {
@@ -152,73 +165,151 @@ function addColumnToTable(schemaname: string, tablename: string,
     if (coltypeschema) {
         coltype = `${coltypeschema}.${coltype}`;
     }
-
+    let haslobs: boolean = false;
+    let isIdentity = false;
     colQual = colqualOperation(colQual);
+    var defaultValue = '';
     var newType = convertToNewType(coltype, colQual, columnname, tablename, schemaname);
-    if(isidentity){
-        if(/IDENTITY\s*\((\d+),\s*(\d+)\)/.test(isidentity)){
-            var identityItems=/IDENTITY\s*\((\d+),\s*(\d+)\)/.exec(isidentity);
-            let startSequence= identityItems[1];
-            let stepSequence= identityItems[2];
-            let sequenceName=`${tablename}_${columnname}_seq`.toLowerCase();
-            
-        }   
-    }
-    
-    var tobeInsertColumn = new Columns(
-        columnname,
-        coltypeschema,
-        newType,
-        colQual,
-        colcollate,
-        isidentity === "true",
-        colisnull === "true",
-        defaultval, 0, tablename, schemaname);
+    if (isidentity) {
+        if (/IDENTITY\s*\((\d+),\s*(\d+)\)/.test(isidentity)) {
+            var identityItems = /IDENTITY\s*\((\d+),\s*(\d+)\)/.exec(isidentity);
+            let startSequence = identityItems[1];
+            let stepSequence = identityItems[2];
+            let sequenceName = `${tablename}_${columnname}_seq`.toLowerCase();
+            defaultValue = `nextval('${format_identifier(schemaname.toLowerCase())}.${sequenceName.toLowerCase()}')`;
+            sequnces.push(new Sequence(Number(startSequence), Number(startSequence),
+                Number(stepSequence), sequenceName, tablename, columnname, schemaname));
+            haslobs = newType === 'bytea' || newType === 'ntext';
+            isIdentity = true;
+        }
 
-    if (columns.indexOf(columns.filter(_ => _.schemaname === schemaname &&
-        _.tablename === tablename && _.name === columnname)[0]) <= 0) {
-        columns.push(tobeInsertColumn);
-    }
-}
+        if (defaultval) {
+            defaultValue = storeDefault(defaultval, coltype);
+        }
 
-export async function convertToPSql(outputChannel: vscode.OutputChannel) {
-    debugger;
-    columTypes = new ColumnTypes();
-    columns = new Array<Columns>();
-    outputChannel.clear();
-    let text = getText();
-    text = readAndClean(text);
-    var lines = text.split('\n');
-    outputChannel.clear();
-    if (lines !== null && lines.length > 0) {
-        const rangeCalculator = calculateRange(0, lines.length, 1);
-        let nextIndex = rangeCalculator.next();
-        MAIN: while (!nextIndex.done) {
-            if (tableRegex.test(lines[nextIndex.value])) {
-                var tableRegexResult = tableRegex.exec(lines[nextIndex.value]);
-                var schemaname = tableRegexResult[1];
-                var tablename = tableRegexResult[2];
-                nextIndex = rangeCalculator.next();
-                TABLE: while (!nextIndex.done) {
-                    if (columnRegex.test(lines[nextIndex.value])) {
-                        addColumnToTable(schemaname, tablename,
-                            columnRegex.exec(lines[nextIndex.value]));
-                    }
-                    nextIndex = rangeCalculator.next();
-                }
-            }
-            nextIndex = rangeCalculator.next();
+        var tobeInsertColumn = new Columns(
+            columnname,
+            coltypeschema,
+            newType,
+            colQual,
+            colcollate,
+            isIdentity,
+            colisnull === 'NOT NULL',
+            defaultValue,
+            0,
+            tablename,
+            haslobs, schemaname);
+
+        if (columns.indexOf(columns.filter(_ => _.schemaname === schemaname &&
+            _.tablename === tablename && _.name === columnname)[0]) <= 0) {
+            columns.push(tobeInsertColumn);
         }
     }
 
-    columns.forEach(_ => {
-        outputChannel.appendLine(_.name);
-        outputChannel.appendLine(_.tablename);
-        outputChannel.appendLine(_.schemaname);
-    });
+    function addComputedColumToTable(schemaname: string, tablename: string,
+        columnRegexResult: RegExpExecArray) {
+        var columnname = columnRegexResult[1];
+        var coltype = 'varchar';
 
-    outputChannel.show();
+        var tobeInsertColumn = new Columns(
+            columnname,
+            '',
+            coltype,
+            '',
+            '',
+            false,
+            false,
+            '',
+            0,
+            tablename,
+            false,
+            schemaname);
+
+        if (columns.indexOf(columns.filter(_ => _.schemaname === schemaname &&
+            _.tablename === tablename && _.name === columnname)[0]) <= 0) {
+            columns.push(tobeInsertColumn);
+        }
+    }
+
+    function storeDefault(value: string, columnType: string) {
+        var returnValue: string = value;
+        if (/^\(?(\d+(\.\d+)?)\)?$/.test(value)) {
+            value = /^\(?(\d+(\.\d+)?)\)?$/.exec(value)[1];
+            if (columnType === 'boolean') {
+                if (value === '0') {
+                    returnValue = 'false';
+                } else if (value === '1') {
+                    returnValue = 'true';
+                }
+            }
+        } else if (/^NULL$/.test(value)) {
+            returnValue = 'NULL';
+        } else if (/^N?'(.*)'$/.test(value)) {
+            returnValue = /^N?'(.*)'$/.exec(value)[1];
+        }
+
+        return returnValue;
+    }
+
+    export async function convertToPSql(outputChannel: vscode.OutputChannel) {
+        debugger;
+        columTypes = new ColumnTypes();
+        columns = new Array<Columns>();
+        sequnces = new Array<Sequence>();
+        constraints = new Array<Constraint>();
+        outputChannel.clear();
+        let text = getText();
+        text = readAndClean(text);
+        var lines = text.split('\n');
+        outputChannel.clear();
+        if (lines !== null && lines.length > 0) {
+            const rangeCalculator = calculateRange(0, lines.length, 1);
+            let nextIndex = rangeCalculator.next();
+            MAIN: while (!nextIndex.done) {
+                if (tableRegex.test(lines[nextIndex.value])) {
+                    var tableRegexResult = tableRegex.exec(lines[nextIndex.value]);
+                    var schemaname = tableRegexResult[1];
+                    var tablename = tableRegexResult[2];
+                    nextIndex = rangeCalculator.next();
+                    TABLE: while (!nextIndex.done) {
+                        if (columnRegex.test(lines[nextIndex.value])) {
+                            addColumnToTable(schemaname, tablename,
+                                columnRegex.exec(lines[nextIndex.value]));
+                        } else if (computedColumnRegex.test(lines[nextIndex.value])) {
+                            addComputedColumToTable(schemaname, tablename,
+                                columnRegex.exec(lines[nextIndex.value]));
+                        } else if (contraintRegex.test(lines[nextIndex.value])) {
+                            let constraint = new Constraint(contraintRegex.exec(lines[nextIndex.value])[1], 'PK', '', schemaname, tablename);
+                            while (!nextIndex.done) {
+                                if (/^\)/.test(lines[nextIndex.value])) {
+                                    constraints.push(constraint);
+                                    nextIndex = rangeCalculator.next();
+                                    continue TABLE;
+                                }
+
+                                if (constrainColRegex.test(lines[nextIndex.value])) {
+                                    constraint.cols = constrainColRegex.test(lines[nextIndex.value])[1];
+                                }
+                            }
+                        } else if (uniqueConstraintRegex.test(lines[nextIndex.value])) {
+                            let uniqueConstraint = new Constraint(uniqueConstraintRegex.exec(lines[nextIndex.value])[1], 'UNIQUE', '', schemaname, tablename);
 
 
+                        }
+                        nextIndex = rangeCalculator.next();
+                    }
+                }
+                nextIndex = rangeCalculator.next();
+            }
+        }
+
+        columns.forEach(_ => {
+            outputChannel.appendLine(_.name);
+            outputChannel.appendLine(_.tablename);
+            outputChannel.appendLine(_.schemaname);
+        });
+
+        outputChannel.show();
+    }
 }
 
