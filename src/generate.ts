@@ -3,6 +3,7 @@ import { Columns } from './models/columns';
 import { ColumnTypes } from './models/columntypes';
 import { Sequence } from './models/sequence';
 import { Constraint } from './models/constraint';
+import { Schema } from './models/schema';
 
 const tableRegex = /^CREATE TABLE \[(.*)\]\.\[(.*)\]\s*\(/;
 const columnRegex = /^\t\[(.*)\] (?:\[(.*)\]\.)?\[(.*)\]\s*(\(.+?\))?(?: COLLATE (\S+))?( IDENTITY\s*\(\d+,\s*\d+\))?(?: ROWGUIDCOL ?)? (?:NOT FOR REPLICATION )?(?:SPARSE +)?(NOT NULL|NULL)(?:\s+CONSTRAINT \[.*\])?(?:\s+DEFAULT \((.*)\))?(?:,|$)?/;
@@ -11,10 +12,13 @@ const computedColumnRegex = /^\t\[(.*)\]\s+AS\s+\((.*)\)/;
 const contraintRegex = /^(?: CONSTRAINT \[(.*)\] )?PRIMARY KEY (?:NON)?CLUSTERED/;
 const constrainColRegex = /^\t\[(.*)\] (ASC|DESC)(,?)/;
 const uniqueConstraintRegex = /^\s*(?:CONSTRAINT \[(.*)\] )?UNIQUE/;
+const constraintRegex = /^CREATE SEQUENCE \[(.*)\]\.\[(.*)\]/;
+const schemaRegex = /^CREATE SCHEMA \[(.*)\]/;
 var columns: Array<Columns>;
 var columTypes: ColumnTypes;
 var sequnces: Array<Sequence>;
 var constraints: Array<Constraint>;
+var schemas: Array<Schema>;
 function getText() {
     var text: string = "";
     const editor = vscode.window.activeTextEditor;
@@ -257,6 +261,7 @@ function addColumnToTable(schemaname: string, tablename: string,
         columns = new Array<Columns>();
         sequnces = new Array<Sequence>();
         constraints = new Array<Constraint>();
+        schemas = new Array<Schema>();
         outputChannel.clear();
         let text = getText();
         text = readAndClean(text);
@@ -293,11 +298,27 @@ function addColumnToTable(schemaname: string, tablename: string,
                             }
                         } else if (uniqueConstraintRegex.test(lines[nextIndex.value])) {
                             let uniqueConstraint = new Constraint(uniqueConstraintRegex.exec(lines[nextIndex.value])[1], 'UNIQUE', '', schemaname, tablename);
+                            while (!nextIndex.done) {
+                                if (/^\)/.test(lines[nextIndex.value])) {
+                                    constraints.push(constraint);
+                                    nextIndex = rangeCalculator.next();
+                                    continue TABLE;
+                                }
 
-
+                                if (constrainColRegex.test(lines[nextIndex.value])) {
+                                    constraint.cols = constrainColRegex.test(lines[nextIndex.value])[1];
+                                }
+                            }
+                        } else if (/^\) ON \[PRIMARY\]/.test(lines[nextIndex.value])) {
+                            continue MAIN;
+                        }
+                        else {
+                            //STOP();
                         }
                         nextIndex = rangeCalculator.next();
                     }
+                } else if (schemaRegex.test(lines[nextIndex.value])) {
+                    schemas.push(new Schema(schemaRegex.exec(lines[nextIndex.value])[0]));
                 }
                 nextIndex = rangeCalculator.next();
             }
