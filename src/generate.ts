@@ -4,6 +4,7 @@ import { ColumnTypes } from './models/columntypes';
 import { Sequence } from './models/sequence';
 import { Constraint } from './models/constraint';
 import { Schema } from './models/schema';
+import { isNumber } from 'util';
 
 const tableRegex = /^CREATE TABLE \[(.*)\]\.\[(.*)\]\s*\(/;
 const columnRegex = /^\t\[(.*)\] (?:\[(.*)\]\.)?\[(.*)\]\s*(\(.+?\))?(?: COLLATE (\S+))?( IDENTITY\s*\(\d+,\s*\d+\))?(?: ROWGUIDCOL ?)? (?:NOT FOR REPLICATION )?(?:SPARSE +)?(NOT NULL|NULL)(?:\s+CONSTRAINT \[.*\])?(?:\s+DEFAULT \((.*)\))?(?:,|$)?/;
@@ -12,8 +13,9 @@ const computedColumnRegex = /^\t\[(.*)\]\s+AS\s+\((.*)\)/;
 const contraintRegex = /^(?: CONSTRAINT \[(.*)\] )?PRIMARY KEY (?:NON)?CLUSTERED/;
 const constrainColRegex = /^\t\[(.*)\] (ASC|DESC)(,?)/;
 const uniqueConstraintRegex = /^\s*(?:CONSTRAINT \[(.*)\] )?UNIQUE/;
-const constraintRegex = /^CREATE SEQUENCE \[(.*)\]\.\[(.*)\]/;
+const sequenceRegex = /^CREATE SEQUENCE \[(.*)\]\.\[(.*)\]/;
 const schemaRegex = /^CREATE SCHEMA \[(.*)\]/;
+const viewRegex = /^\s*(create\s*view)/i;
 var columns: Array<Columns>;
 var columTypes: ColumnTypes;
 var sequnces: Array<Sequence>;
@@ -319,6 +321,41 @@ function addColumnToTable(schemaname: string, tablename: string,
                     }
                 } else if (schemaRegex.test(lines[nextIndex.value])) {
                     schemas.push(new Schema(schemaRegex.exec(lines[nextIndex.value])[0]));
+                } else if (sequenceRegex.test(lines[nextIndex.value])) {
+                    var sequencename = sequenceRegex.exec(lines[nextIndex.value])[2];
+                    var sequenceStart = 0;
+                    var sequenceStep = 0;
+                    var sequenceMin = 0;
+                    var sequenceMax = 0;
+                    var sequenceCache = 0;
+                    nextIndex = rangeCalculator.next();
+                    SEQUENCE: while (nextIndex.done) {
+                        if (/^\s*AS \[.*\]\s*$/.test(lines[nextIndex.value])) {
+                            continue;
+                        } else if (/^\s*START WITH (\d+)\s*$/.test(lines[nextIndex.value])) {
+                            sequenceStart = Number(/^\s*START WITH (\d+)\s*$/.exec(lines[nextIndex.value])[1]);
+                        } else if (/^\s*INCREMENT BY (\d+)\s*$/.test(lines[nextIndex.value])) {
+                            sequenceStep = Number(/^\s*INCREMENT BY (\d+)\s*$/.exec(lines[nextIndex.value])[1]);
+                        }
+                        else if (/^\s*MINVALUE (-?\d+)\s*$/.test(lines[nextIndex.value])) {
+                            sequenceMin = Number(/^\s*MINVALUE (-?\d+)\s*$/.exec(lines[nextIndex.value])[1]);
+                        }
+                        else if (/^\s*MAXVALUE (-?\d+)\s*$/.test(lines[nextIndex.value])) {
+                            sequenceMax = Number(/^\s*MAXVALUE (-?\d+)\s*$/.exec(lines[nextIndex.value])[1]);
+                        } else if (/^\s*(NO)?CACHE( \d+)?\s*$/.test(lines[nextIndex.value])) {
+                            if (/^\s*(NO)?CACHE( \d+)?\s*$/.test(lines[nextIndex.value])[1]) {
+                                sequenceCache = 1;
+                            } else if (/^\s*(NO)?CACHE( \d+)?\s*$/.exec(lines[nextIndex.value])[2]) {
+                                sequenceCache = Number(/^\s*(NO)?CACHE( \d+)?\s*$/.exec(lines[nextIndex.value])[2]);
+                            } else {
+                                sequenceCache = 100;
+                            }
+                        } else if (/^GO$/.test(lines[nextIndex.value])) {
+                            continue MAIN;
+                        }
+
+                        nextIndex = rangeCalculator.next();
+                    }
                 }
                 nextIndex = rangeCalculator.next();
             }
