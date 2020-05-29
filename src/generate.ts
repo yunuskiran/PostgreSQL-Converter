@@ -16,6 +16,7 @@ const uniqueConstraintRegex = /^\s*(?:CONSTRAINT \[(.*)\] )?UNIQUE/;
 const sequenceRegex = /^CREATE SEQUENCE \[(.*)\]\.\[(.*)\]/;
 const schemaRegex = /^CREATE SCHEMA \[(.*)\]/;
 const viewRegex = /^\s*(create\s*view)/i;
+
 var columns: Array<Columns>;
 var columTypes: ColumnTypes;
 var sequnces: Array<Sequence>;
@@ -355,6 +356,29 @@ function addColumnToTable(schemaname: string, tablename: string,
                         }
 
                         nextIndex = rangeCalculator.next();
+                    }
+
+                    sequnces.push(new Sequence(sequenceStart, sequenceMin, sequenceStep, sequencename, '', '', ''));
+                } else if (viewRegex.test(lines[nextIndex.value])) {
+                    let vievname;
+                    let supplement;
+                    let schemaname = 'public';
+                    if (/^\s*(create\s*view)\s*(?:\[(\S+)\]\.)?\[(.*?)\]\s*(.*)$/i.test(lines[nextIndex.value])) {
+                        var viewinfo = /^\s*(create\s*view)\s*(?:\[(\S+)\]\.)?\[(.*?)\]\s*(.*)$/i.exec(lines[nextIndex.value]);
+                        viewname = viewinfo[3];
+                        supplement = viewinfo[4];
+                        let schemaname;
+                        if (viewinfo[2]) {
+                            schemaname = viewinfo[2];
+                        }
+                    } else {
+                        nextIndex = rangeCalculator.next();
+                        if(/^\s*(?:\[(\S+)\]\.)?\[(.*?)\]\s*(.*)$/.test(lines[nextIndex.value])){
+                            
+                        }
+                        else{
+                            console.log('where is view sorry! :)');
+                        }
                     }
                 }
                 nextIndex = rangeCalculator.next();
