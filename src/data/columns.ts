@@ -12,8 +12,8 @@ export class Columns extends Table {
     position: number;
 
     constructor(name: string, typeSchema: string, type: string, qual: string,
-        collate: string, isIdentity: boolean, isNull: boolean, defaultValue: string, position: number, tablename: string, haslobs: boolean, schemaname: string) {
-        super(tablename, haslobs, schemaname);
+        collate: string, isIdentity: boolean, isNull: boolean, defaultValue: string, position: number, tableName: string, hasLobs: boolean, schemaName: string) {
+        super(tableName, hasLobs, schemaName);
         this.name = name;
         this.typeSchema = typeSchema;
         this.type = type;

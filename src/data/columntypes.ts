@@ -1,6 +1,6 @@
 export class ColumnTypes {
     items: Map<string, string>;
-    unqualItems: Map<string, number>;
+    unqualItems: Map<string, Number>;
     constructor() {
         this.items = new Map<string, string>();
         this.items.set("int", "int");
@@ -41,12 +41,11 @@ export class ColumnTypes {
         return this.items;
     }
 
-    findType(key: string) {
-        if (this.items.get(key)!==null) {
-            this.items.get(key);
-        } else {
-            return '';
+    findType(key: string): string {
+        if (this.items.get(key.toString()) !== null) {
+            this.items.get(key.toString());
         }
+        return '';
     }
 
     getUnqualTypes() {
@@ -54,6 +53,6 @@ export class ColumnTypes {
     }
 
     findUnqualType(key: string) {
-        return this.unqualItems.get(key);
+        return this.unqualItems.get(key.toString());
     }
 }
