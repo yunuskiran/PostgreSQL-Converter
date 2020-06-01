@@ -1,12 +1,6 @@
 import { Schema } from "./schema";
 
-export class Table extends Schema {
-    tableName: string;
+export interface Table extends Schema {
+    name: string;
     hasLobs: boolean;
-
-    constructor(tableName: string, hasLobs: boolean, schemaName: string) {
-        super(schemaName);
-        this.hasLobs = hasLobs;
-        this.tableName = tableName;
-    }
 }

@@ -2,7 +2,6 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { convertToPSql } from './generate';
 
 
 // The module 'azdata' contains the Azure Data Studio extensibility API
@@ -10,6 +9,8 @@ import { convertToPSql } from './generate';
 // Import the module and reference it with the alias azdata in your code below
 
 import * as azdata from 'azdata';
+import { convertToPSql } from './generate';
+
 var outputChannel = vscode.window.createOutputChannel("PostgreSql Converter");
 
 export function activate(context: vscode.ExtensionContext) {

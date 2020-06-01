@@ -1,20 +1,10 @@
-import { Schema } from "./schema";
+import { Table } from "./table";
 
-export class Sequence extends Schema {
+export interface Sequence extends Table {
     start: Number;
     min: Number;
     step: Number;
-    name: String;
-    ownerTable: String;
-    ownerColumn: String;
-
-    constructor(start: Number, min: Number, step: Number, name: String, ownerTable: String, ownerColumn: String, schemaName: String) {
-        super(schemaName);
-        this.start = start;
-        this.min = min;
-        this.step = step;
-        this.name = name;
-        this.ownerTable = ownerTable;
-        this.ownerColumn = ownerColumn;
-    }
+    name: string;
+    ownerTable: string;
+    ownerColumn: string;
 }

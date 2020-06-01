@@ -1,7 +1,3 @@
-export class Schema {
-    schemaName: string;
-
-    constructor(schemaName: string) {
-        this.schemaName = schemaName;
-    }
+export interface Schema {
+    name: string;
 }
