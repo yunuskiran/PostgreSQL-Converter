@@ -1,7 +1,9 @@
 import { Column } from "../data/column";
+
 var items: Array<Column>;
 export interface IColumnService {
     add(item: Column): void;
+    count(): number;
 }
 
 export class ColumnService implements IColumnService {
@@ -15,4 +17,8 @@ export class ColumnService implements IColumnService {
         items.push(item);
     }
 
+    count(): number {
+        return items.length;
+    }
 }
+

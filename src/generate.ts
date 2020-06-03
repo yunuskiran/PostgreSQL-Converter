@@ -1,14 +1,7 @@
 import * as vscode from 'vscode';
-import { ColumnTypes } from './data/columntypes';
-import { Sequence } from './data/sequence';
-import { Constraint } from './data/constraint';
 import * as constants from './common/constant';
-
-var columns: Array<Column>;
-var columTypes: ColumnTypes;
-var sequences: Array<Sequence>;
-var constraints: Array<Constraint>;
-var schemas: Array<Schema>;
+import { Line } from './data/line';
+import { LineAggregate } from './services/lineAggregate';
 
 
 function getText() {
@@ -157,7 +150,7 @@ function addColumnToTable(schemaName: string, tableName: string,
         }
 
         var tobeInsertColumn = new Column(
-           aa);
+            aa);
 
         if (columns.indexOf(columns.filter(_ => _.schemaName === schemaName &&
             _.tableName === tableName && _.name === columnName)[0]) <= 0) {
@@ -171,7 +164,7 @@ function addComputedColumToTable(schemaName: string, tableName: string,
     var columnName = columnRegexResult[1];
     var columnType = 'varchar';
 
-    var tobeInsertColumn = new Column({name:columnName,type:columnType,tableName:tableName,schemaName:schemaName,collate:'',defaultValue:'',hasLobs:false,isIdentity:false,isNull:false,position:0,qual:'',typeSchema:''});
+    var tobeInsertColumn = new Column({ name: columnName, type: columnType, tableName: tableName, schemaName: schemaName, collate: '', defaultValue: '', hasLobs: false, isIdentity: false, isNull: false, position: 0, qual: '', typeSchema: '' });
     if (columns.indexOf(columns.filter(_ => _.schemaName === schemaName &&
         _.tableName === tableName && _.name === columnName)[0]) <= 0) {
         columns.push(tobeInsertColumn);
@@ -199,11 +192,6 @@ function storeDefault(value: string, columnType: string) {
 }
 
 function init(outputChannel: vscode.OutputChannel) {
-    columTypes = new ColumnTypes();
-    columns = new Array<Columns>();
-    sequences = new Array<Sequence>();
-    constraints = new Array<Constraint>();
-    schemas = new Array<Schema>();
     outputChannel.clear();
     let text = getText();
     text = text.readAndClean();
@@ -213,8 +201,19 @@ function init(outputChannel: vscode.OutputChannel) {
 }
 
 export async function convertToPSql(outputChannel: vscode.OutputChannel) {
-    debugger;
     var lines = init(outputChannel);
+    let lineAggregate: LineAggregate = new LineAggregate();
+    lines.forEach((_) => {
+        var newLine = new Line();
+        newLine.item = _;
+        lineAggregate.add(newLine);
+    });
+
+    var iterator = lineAggregate.CreateIterator();
+    while (iterator.hasItem()) {
+
+    }
+
     if (lines !== null && lines.length > 0) {
         const rangeCalculator = Math.calculate(0, lines.length, 1);
         let nextIndex = rangeCalculator.next();
