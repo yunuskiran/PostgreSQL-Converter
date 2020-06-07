@@ -1,7 +1,7 @@
 import { ExpressionInterface } from "./expressionInterface";
+import { Line } from "../data/line";
 
 export class SchemaExpression implements ExpressionInterface {
-    do(): string {
-        return "schemaExpression";
+    do(line: Line): void {
     }
 }

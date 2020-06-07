@@ -1,7 +1,7 @@
 import { ExpressionInterface } from "./expressionInterface";
+import { Line } from "../data/line";
 
 export class SequenceExpression implements ExpressionInterface {
-    do(): string {
-        return "sequenceExpression";
+    do(line: Line): void {
     }
 }

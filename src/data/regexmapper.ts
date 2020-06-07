@@ -17,8 +17,7 @@ export class RegexMapper {
         this.items.set(viewExpression, new ViewExpression());
     }
 
-
-    find(lineString: string): void {
+    operate(lineString: string): void {
         for (let key of this.items.keys()) {
             if (key.test(lineString)) {
                 if (this.items.get(key) !== null) {

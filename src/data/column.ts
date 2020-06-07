@@ -1,6 +1,6 @@
 import { Table } from "./table";
 
-export interface Column extends Table {
+export interface Column {
     name: string;
     typeSchema: string;
     type: string;
@@ -9,5 +9,5 @@ export interface Column extends Table {
     isIdentity: boolean;
     isNull: boolean;
     defaultValue: string;
-    position: number;
+    table: Table;
 }

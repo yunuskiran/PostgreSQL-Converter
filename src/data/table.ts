@@ -1,6 +1,6 @@
 import { Schema } from "./schema";
 
-export interface Table extends Schema {
+export interface Table {
     name: string;
-    hasLobs: boolean;
+    schema: Schema;
 }

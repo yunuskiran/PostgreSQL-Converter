@@ -1,3 +1,5 @@
+import { Line } from "../data/line";
+
 export interface ExpressionInterface {
-    do(): string;
+    do(line: Line): void;
 }

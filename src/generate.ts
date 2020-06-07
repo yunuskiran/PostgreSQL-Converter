@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as constants from './common/constant';
 import { Line } from './data/line';
 import { LineAggregate } from './services/lineAggregate';
+import { RegexMapper } from './data/regexmapper';
 
 
 function getText() {
@@ -125,6 +126,7 @@ function addColumnToTable(schemaName: string, tableName: string,
     if (columnTypeSchema) {
         columnType = `${columnTypeSchema}.${columnType}`;
     }
+    
     let hasLobs: boolean = false;
     let tempIsIdentity = false;
     columnQual = colqualOperation(columnQual);
@@ -209,9 +211,10 @@ export async function convertToPSql(outputChannel: vscode.OutputChannel) {
         lineAggregate.add(newLine);
     });
 
+    var mapper: RegexMapper = new RegexMapper();
     var iterator = lineAggregate.CreateIterator();
     while (iterator.hasItem()) {
-
+        mapper.operate(iterator.current.toString());
     }
 
     if (lines !== null && lines.length > 0) {

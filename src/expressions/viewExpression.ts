@@ -1,7 +1,7 @@
 import { ExpressionInterface } from "./expressionInterface";
+import { Line } from "../data/line";
 
 export class ViewExpression implements ExpressionInterface {
-    do(): string {
-        return "viewExpression";
+    do(line: Line): void {
     }
 }
