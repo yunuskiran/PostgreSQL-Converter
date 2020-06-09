@@ -18,10 +18,10 @@ export class TableService implements ITableService {
     }
 
     convert(line: Line): Table {
-        var table: Table = { name: 'undefined', schema: { name: 'undefined' } };
+        var table: Table = { name: 'undefined', hasLobs: false, schema: { name: 'undefined' } };
         var result = constants.tableExpression.executeReturnArray(line.item);
         if (result) {
-            table = { name: result[1], schema: { name: result[2] } };
+            table = { name: result[1], hasLobs: false, schema: { name: result[2] } };
         }
 
         return table;
@@ -38,5 +38,21 @@ export class TableService implements ITableService {
 
     lastOrDefault(): Table {
         return items[items.length - 1];
+    }
+
+    find(table: Table) {
+        var item = items.filter(_ => _.name === table.name && _.schema.name === table.schema.name);
+        if (!item) {
+            return undefined;
+        }
+
+        return item[0];
+    }
+
+    setHasLobs(table: Table) {
+        var item = this.find(table);
+        if (item) {
+            item.hasLobs = true;
+        }
     }
 }

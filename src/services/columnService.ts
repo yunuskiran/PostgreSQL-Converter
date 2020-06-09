@@ -4,6 +4,7 @@ import { TableService } from "./tableService";
 import * as constants from '../common/constant';
 import { Table } from "../data/table";
 import { ColumnTypes } from "../data/columntypes";
+import { SequenceService } from "./sequenceService";
 
 var items: Array<Column>;
 var columnTypes: ColumnTypes;
@@ -43,11 +44,21 @@ export class ColumnService implements IColumnService {
             column.name = result[1];
             column.typeSchema = result[2];
             column.qual = this.qual(result[4]);
-            column.type = this.convertToNewType(this.type(column.typeSchema, result[3]), column.qual);
+            column.type = this.toType(this.type(column.typeSchema, result[3]), column.qual);
             column.collate = result[5];
             column.isIdentity = this.isIdentity(result[6], table);
             column.isNull = this.isNull(result[7]);
-            column.defaultValue = result[8];
+            column.defaultValue = column.isIdentity ? `nextval('${this.format_identifier(table.schema.name.toLowerCase())}.${table.name}_${column.name}_seq')` : '';
+
+            if (column.isIdentity) {
+                var sequenceService = new SequenceService();
+                var sequence = sequenceService.convertFromIdentity(result[6], column);
+                sequenceService.add(sequence);
+            }
+
+            if (column.type === 'bytea' || column.type === 'ntext') {
+                tableService.setHasLobs(table);
+            }
         }
 
         return column;
@@ -67,7 +78,17 @@ export class ColumnService implements IColumnService {
     }
 
     isIdentity(expression: string, table: Table): boolean {
-        return true;
+        var isIdentity = false;
+        if (expression) {
+            if (constants.identiyExpression.test(expression)) {
+                var identityItems = constants.identiyExpression.executeReturnArray(expression);
+                if (identityItems !== null) {
+                    isIdentity = true;
+                }
+            }
+        }
+
+        return isIdentity;
     }
 
     isNull(expression: string): boolean {
@@ -108,7 +129,8 @@ export class ColumnService implements IColumnService {
         return `"${value}"`;
     }
 
-    convertToNewType(type: string, qual: string) {
+    //TODO:REFACTOR
+    toType(type: string, qual: string) {
         let tempType: string = '';
         if (type) {
             if (columnTypes.findType(type)) {
